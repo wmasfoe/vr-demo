@@ -22,10 +22,11 @@ export interface ControlSystem {
 }
 
 const MAX_PITCH = Math.PI * 0.45;
+const SENSOR_SMOOTHING_ALPHA = 0.15;
 
 export function createControlSystem(target: HTMLElement, onChange: (orientation: Orientation) => void): ControlSystem {
   const motion = new MotionController((orientation) => {
-    sensorOrientation = orientation;
+    sensorOrientation = smoothOrientation(orientation);
     emit();
   });
   const touch = new TouchController(target, (deltaYaw, deltaPitch) => {
@@ -37,6 +38,7 @@ export function createControlSystem(target: HTMLElement, onChange: (orientation:
   let sensorOrientation: Orientation | null = null;
   const inputOffset: Orientation = { yaw: 0, pitch: 0 };
   const aggregate: Orientation = { yaw: 0, pitch: 0 };
+  let smoothedOrientation: Orientation | null = null;
 
   function emit() {
     const baseYaw = sensorOrientation?.yaw ?? 0;
@@ -46,8 +48,29 @@ export function createControlSystem(target: HTMLElement, onChange: (orientation:
     onChange({ ...aggregate });
   }
 
-  if (motion.isSupported() && !motion.requiresPermission()) {
+  function smoothOrientation(next: Orientation): Orientation {
+    if (!smoothedOrientation) {
+      smoothedOrientation = { ...next };
+      return { ...next };
+    }
+    smoothedOrientation = {
+      yaw: lerpAngle(smoothedOrientation.yaw, next.yaw, SENSOR_SMOOTHING_ALPHA),
+      pitch: lerp(smoothedOrientation.pitch, next.pitch, SENSOR_SMOOTHING_ALPHA)
+    };
+    return { ...smoothedOrientation };
+  }
+
+  const resetSmoothing = () => {
+    smoothedOrientation = null;
+  };
+
+  const startMotionStream = () => {
+    resetSmoothing();
     motion.start();
+  };
+
+  if (motion.isSupported() && !motion.requiresPermission()) {
+    startMotionStream();
   }
 
   return {
@@ -59,7 +82,7 @@ export function createControlSystem(target: HTMLElement, onChange: (orientation:
       if (!granted) {
         return 'denied';
       }
-      motion.start();
+      startMotionStream();
       emit();
       return 'running';
     },
@@ -74,6 +97,7 @@ export function createControlSystem(target: HTMLElement, onChange: (orientation:
     dispose() {
       motion.dispose();
       touch.dispose();
+      resetSmoothing();
     }
   };
 }
@@ -85,4 +109,13 @@ function clamp(value: number, min: number, max: number) {
 function normalizeAngle(value: number) {
   const twoPi = Math.PI * 2;
   return ((value % twoPi) + twoPi) % twoPi - Math.PI;
+}
+
+function lerpAngle(current: number, target: number, alpha: number) {
+  const delta = normalizeAngle(target - current);
+  return normalizeAngle(current + delta * alpha);
+}
+
+function lerp(current: number, target: number, alpha: number) {
+  return current + (target - current) * alpha;
 }

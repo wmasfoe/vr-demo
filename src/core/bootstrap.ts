@@ -1,7 +1,7 @@
 import { PanoramaRenderer } from '../renderer/panoramaRenderer';
 import { createControlSystem } from '../controls/controller';
 
-const TEXTURE_URL = new URL('../assets/panorama-gradient.png', import.meta.url).href;
+const TEXTURE_URL = new URL('../assets/panorama-demo.png', import.meta.url).href;
 
 export async function bootstrap() {
   const root = document.querySelector<HTMLDivElement>('#app');
